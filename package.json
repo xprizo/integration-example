@@ -1,0 +1,7 @@
+{
+  "name": "xprizo-integration",
+  "version": "1.0.0",
+  "main": "start.js",
+  "type": "module",
+  "license": "ISC"
+}
