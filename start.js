@@ -1,12 +1,15 @@
 import { createServer } from 'http';
+import signalR from "@microsoft/signalr";
 
-const username = '<USERNAME>';
-const password = '<PASSWORD>'
-const payee = '<PAYEE>' // this can be a users username, email or mobile
+const username = '<username>';
+const password = '<password>'
+const payee = '<payee>' // this can be a users username, email or mobile
 const apiUrl = 'https://xprizo-test.azurewebsites.net';
+
 let token = "";
 let accountId = 0;
 let profile = {};
+let connection
 
 async function getData(url = "") { return await postData(url, null, "GET"); }
 async function putData(url = "", data = null) { return await postData(url, data, "PUT"); }
@@ -127,6 +130,30 @@ async function approveCallback(req, res) {
     })
 }
 
+// You can use our message service to receive notifications
+async function connect() {
+    const url = `https://xprizo-messaging.azurewebsites.net/hub`;
+    console.log(`connecting to hub...${url} with '${username}'`);
+
+    connection = new signalR.HubConnectionBuilder().withUrl(url).build();
+
+    //Listen for new approvals
+    connection.on("NewApproval", data => {
+        console.log('New Pending Transaction...', data);
+    });
+    connection.on("NewTransaction", data => {
+        console.log('Transaction Approved...', data);
+    });
+
+    await login();
+    return connection.start()
+        .then(() => connection.invoke("Register", token))
+        .then(response => {
+            console.log(`Logged in with ${username}`, response)
+        }).catch(ex => console.log(ex));
+}
+
+
 
 const server = createServer(async (req, res) => {
     switch (req.url) {
@@ -150,13 +177,16 @@ const server = createServer(async (req, res) => {
             return await requestPayment().then(response => {
                 console.log(response);
                 if (response.status != 200) return res.end();
-                var url = `${apiUrl}/#/payment/193/452?key=${response.data.key}`;
                 var redirect = 'http://localhost:8080/';
                 var url = `${apiUrl}/#/payment/${profile.id}/${accountId}?key=${response.data.key}&redirect=${redirect}`;
                 return res.writeHead(302, { Location: url }).end();
             });
         case '/approve':
             return approveCallback(req, res);
+        case '/connect':
+            return await connect().then(() => {
+                res.end("Connected");
+            });
         default:
             res.end(`
             <!DOCTYPE html><body style='margin:20px;'>
@@ -164,6 +194,7 @@ const server = createServer(async (req, res) => {
 
               <h2><a href="/login">/login</a></h2> Used to get a token<br/>
               <h2><a href="/setcallback">/setcallback</a></h2> Sets your callback so that you can listen for approvals <br/>
+              <h2><a href="/connect">/connect</a></h2> Connect to message setver <br/>
               <h2><a href="/profile">/profile</a></h2> Used to get youpr profile and wallet id (accountId) <br/>
               <h2><a href="/requestpayment" >/requestpayment</a></h2> <br/>
             </body></html>`);

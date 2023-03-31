@@ -33,6 +33,27 @@ This example does the following
 - Waits for Payment Approval Callbacks
 
 
+## FAQ ##
+
+
+
+> I do not have an account
+
+You must first register as a user on the system
+
+> I cannot find the user even though I know they exists
+
+
+Users must have there wallets visible to the public or they must be in your friends list.
+They must also have enabled their Find by options
+
+
+> The Pay by credit card is disabled
+
+Currently on USD and INR are supported.
+You must use your either your USD or INR wallet to received funds into 
+
+
  
 
 
