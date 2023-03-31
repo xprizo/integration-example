@@ -5,12 +5,16 @@ const username = '<username>';
 const password = '<password>'
 const payee = '<payee>' // this can be a users username, email or mobile
 const apiUrl = 'https://xprizo-test.azurewebsites.net';
+const messageServer = `https://xprizo-messaging.azurewebsites.net/hub`; //messaging server
+const localhost = `http://localhost:8080`; // this server
 
 let token = "";
 let accountId = 0;
 let profile = {};
 let connection
 
+
+// General http function to call the api server
 async function getData(url = "") { return await postData(url, null, "GET"); }
 async function putData(url = "", data = null) { return await postData(url, data, "PUT"); }
 async function postData(url = "", data = {}, method = "POST") {
@@ -132,10 +136,9 @@ async function approveCallback(req, res) {
 
 // You can use our message service to receive notifications
 async function connect() {
-    const url = `https://xprizo-messaging.azurewebsites.net/hub`;
-    console.log(`connecting to hub...${url} with '${username}'`);
+    console.log(`connecting to hub...${messageServer} with '${username}'`);
 
-    connection = new signalR.HubConnectionBuilder().withUrl(url).build();
+    connection = new signalR.HubConnectionBuilder().withUrl(messageServer).build();
 
     //Listen for new approvals
     connection.on("NewApproval", data => {
@@ -153,8 +156,7 @@ async function connect() {
         }).catch(ex => console.log(ex));
 }
 
-
-
+// server and basic routing 
 const server = createServer(async (req, res) => {
     switch (req.url) {
         case '/login':
@@ -170,14 +172,14 @@ const server = createServer(async (req, res) => {
                 res.end();
             });
         case '/setcallback':
-            return await setApprovalWebhook("http://localhost/approve").then(() => {
+            return await setApprovalWebhook(`${localhost}/approve`).then(() => {
                 res.end("Done");
             });
         case '/requestpayment':
             return await requestPayment().then(response => {
                 console.log(response);
                 if (response.status != 200) return res.end();
-                var redirect = 'http://localhost:8080/';
+                var redirect = localhost;
                 var url = `${apiUrl}/#/payment/${profile.id}/${accountId}?key=${response.data.key}&redirect=${redirect}`;
                 return res.writeHead(302, { Location: url }).end();
             });
@@ -204,7 +206,6 @@ const server = createServer(async (req, res) => {
 });
 
 server.listen(8080);
-
 console.log('server running on port 8080');
 
 
