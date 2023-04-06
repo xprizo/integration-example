@@ -128,26 +128,24 @@ async function getStatus(accountid, reference) {
 //When the user approves the transaction the approval callback will be triggered
 async function buildRequestPaymentRedirect() {
     if (await login() === null) return;
-    var wallet = await getWalletInfo(contactId, 'INR');
+    var wallet = await getWalletInfo(contactId, 'INR'); //get payees wallet
 
-    const url = `${apiUrl}/api/Merchant/EncryptRequestPayment`;
+    const url = `${apiUrl}/api/Merchant/RequestPaymentRedirect?returnUrl=${localhost}`; // encrypt the payment data
     const body = {
-        "name": name,
-        "accountId": wallet.id,
-        "description": "Subscription",
-        "reference": Math.floor(Math.random() * 10000000000001).toString(),
-        "amount": 10,
-        "currencyCode": 'EUR',
+        "name": name, //user email or mobile number
+        "accountId": wallet.id, // payee account - this shoult be an INR account
+        "description": "Subscription", // description of what the payment is for
+        "reference": Math.floor(Math.random() * 10000000000001).toString(), // a unique reference number
+        "amount": 10, // the amount to pay
+        "currencyCode": 'EUR', // the currency to display to the user (payments will still be made in INR and then converted)
     }
     return await postData(url, body).then(response => {
         if (response.status != 200) {
             console.log('Request Data Error:', response);
             return null
         }
-        const encdata = encodeURIComponent(response.data.description); // encode encrypted data
-        var redirect = localhost;  //The url to return to
-        //Create the url to be redirected to to complete the payment
-        return `${webUrl}/#/payment/${contactId}/${wallet.id}?encdata=${encdata}&redirect=${redirect}`;
+        console.log(response);
+        return response.data.description;
     });
 }
 
