@@ -1,12 +1,12 @@
 import { createServer } from 'http';
 import signalR from "@microsoft/signalr";
 
-const username = 'ahmed';
-const password = 'Password123!'
-const name = 'nicole.orpen@gmail.com' // the person making the payment, this can be a users username, email or mobile
-const apiUrl = 'http://localhost:5001'; //'https://xprizo-test.azurewebsites.net';
-const webUrl = 'https://localhost:44347'; //'https://xprizo-test.azurewebsites.net';
-const messageServer = 'http://localhost:5120/hub'; // `https://xprizo-messaging.azurewebsites.net/hub`; //messaging server
+const username = '<username>';
+const password = '<password>'
+const name = 'test@gmail.com' // the person making the payment, this can be a users username, email or mobile
+const apiUrl = 'https://xprizo-test.azurewebsites.net';
+const webUrl = 'https://xprizo-test.azurewebsites.net';
+const messageServer = 'https://xprizo-messaging.azurewebsites.net/hub';
 const localhost = `http://localhost:8080`; // this server
 
 let token = ""; // a token create using the getToken function
