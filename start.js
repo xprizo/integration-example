@@ -7,7 +7,7 @@ const currencyCode = 'EUR';
 
 const username = 'test-processor';
 const password = 'Password123!'// const name = 'test@gmail.com' // the person making the payment, this can be a users username, email or mobile
-const name = 'nicole.orpen@gmail.com' // the person making the payment, this can be a users username, email or mobile
+const name = 'a-test-user@gmail.com' // the person making the payment, this can be a users username, email or mobile
 const apiUrl = 'https://xprizo-test.azurewebsites.net';
 const messageServer = 'https://xprizo-messaging.azurewebsites.net/hub';
 const merchant = 'test-merchant'; // The merchant who will receive the funds
