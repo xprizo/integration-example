@@ -1,17 +1,20 @@
 import { createServer } from 'http';
 import signalR from "@microsoft/signalr";
 
-const username = '<username>';
-const password = '<password>'
-const name = 'test@gmail.com' // the person making the payment, this can be a users username, email or mobile
-const apiUrl = 'https://xprizo-test.azurewebsites.net';
-const webUrl = 'https://xprizo-test.azurewebsites.net';
-const messageServer = 'https://xprizo-messaging.azurewebsites.net/hub';
 const localhost = `http://localhost:8080`; // this server
+const amount = 10;
+const currencyCode = 'EUR';
+
+const username = 'test-processor';
+const password = 'Password123!'// const name = 'test@gmail.com' // the person making the payment, this can be a users username, email or mobile
+const name = 'nicole.orpen@gmail.com' // the person making the payment, this can be a users username, email or mobile
+const apiUrl = 'https://xprizo-test.azurewebsites.net';
+const messageServer = 'https://xprizo-messaging.azurewebsites.net/hub';
+const merchant = 'test-merchant'; // The merchant who will receive the funds
+
 
 let token = ""; // a token create using the getToken function
 let contactId = 0; //the id of the user that logged in
-let accountId = 0;
 let hubConnection; // the connection of the messaging server
 
 
@@ -60,7 +63,6 @@ async function login() {
             console.log('Login Error:', response);
             return null
         }
-        console.log('token', response);
         contactId = response.data.id;
         token = response.data.token;
         return response.data;
@@ -128,16 +130,21 @@ async function getStatus(accountid, reference) {
 //When the user approves the transaction the approval callback will be triggered
 async function buildRequestPaymentRedirect() {
     if (await login() === null) return;
-    var wallet = await getWalletInfo(contactId, 'INR'); //get payees wallet
+    var wallet = await getWalletInfo(merchant, 'INR'); //get payees wallet
+    console.log('wallet:', wallet);
+    if (!wallet.id) {
+        console.log('Request Data Error:', `Merchant wallet Not found (${merchant})`);
+        return null
+    }
 
     const url = `${apiUrl}/api/Merchant/RequestPaymentRedirect?returnUrl=${localhost}`; // encrypt the payment data
     const body = {
         "name": name, //user email or mobile number
-        "accountId": wallet.id, // payee account - this shoult be an INR account
+        "accountId": wallet.id, // payee account - this should be an INR account
         "description": "Subscription", // description of what the payment is for
         "reference": Math.floor(Math.random() * 10000000000001).toString(), // a unique reference number
-        "amount": 10, // the amount to pay
-        "currencyCode": 'EUR', // the currency to display to the user (payments will still be made in INR and then converted)
+        "amount": amount, // the amount to pay
+        "currencyCode": currencyCode, // the currency to display to the user (payments will still be made in INR and then converted)
     }
     return await postData(url, body).then(response => {
         if (response.status != 200) {
@@ -157,13 +164,26 @@ async function callbackHandler(req, res) {
     req.on('data', function (chunk) { str += chunk; });
     req.on('end', function () {
         var data = JSON.parse(str);
-        console.log('callback response', data);
-
-        console.log(`Checking status for tx: ${data.transaction.reference}`);
-        getStatus(accountId, data.transaction.reference).then(response => {
-            res.writeHead(response.status, { 'Content-Type': 'application/json' });
-            res.end(response.data);
-        })
+        console.log('callback response:', data);
+        if (data.transaction.id) {
+            console.log(`Checking status for tx: ${data.transaction.reference}`);
+            login()
+                .then(() => {
+                    return getWalletInfo(merchant, 'INR')
+                })
+                .then(response => {
+                    return getStatus(response.id, data.transaction.reference)
+                })
+                .then(response => {
+                    res.writeHead(200, { 'Content-Type': 'application/json' });
+                    res.end(response.data);
+                })
+                .catch(() => {
+                    res.end();
+                })
+        } else {
+            res.end();
+        }
     })
 }
 
