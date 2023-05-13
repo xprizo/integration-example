@@ -1,27 +1,25 @@
 import { createServer } from 'http';
 import signalR from "@microsoft/signalr";
 
-const localhost = `http://localhost:8080`; // this server
-const amount = 10;
-const currencyCode = 'EUR';
+const port = 8080
+const localhost = `http://localhost:${port}`; // this server
 
-const username = 'test-processor';
-const password = 'Password123!'// const name = 'test@gmail.com' // the person making the payment, this can be a users username, email or mobile
-const name = 'a-test-user@gmail.com' // the person making the payment, this can be a users username, email or mobile
-const apiUrl = 'https://xprizo-test.azurewebsites.net';
-const messageServer = 'https://xprizo-messaging.azurewebsites.net/hub';
-const merchant = 'test-merchant'; // The merchant who will receive the funds
-
-
-let token = ""; // a token create using the getToken function
-let contactId = 0; //the id of the user that logged in
 let hubConnection; // the connection of the messaging server
+
+const username = 'test-processor'; // The user/profile that performs the process
+const password = 'Password123!';
+
+const merchant = 'test-merchant'; // (Payee) The merchant who will receive the funds
+const name = 'a.user@email.com' // (Payor) The person making the payment (use a unique name, like their email from your system)
+
+const apiUrl = 'https://xprizo-test.azurewebsites.net';  // Xprizo's api server
+const messageServer = 'https://xprizo-messaging.azurewebsites.net/hub'; // Xprizo's messaging server that can be used for receing event messages via sockets (signalR)
 
 
 // General http function to call the api server
-async function getData(url = "") { return await postData(url, null, "GET"); }
-async function putData(url = "", data = null) { return await postData(url, data, "PUT"); }
-async function postData(url = "", data = {}, method = "POST") {
+async function getData(url = "", token = "") { return await postData(url, null, token, "GET"); }
+async function putData(url = "", data = null, token = "",) { return await postData(url, data, token, "PUT"); }
+async function postData(url = "", data = {}, token = "", method = "POST") {
     try {
         var headers = { "Content-Type": "application/json" }
         if (token) headers.Authorization = `Bearer ${token}`;
@@ -63,18 +61,17 @@ async function login() {
             console.log('Login Error:', response);
             return null
         }
-        contactId = response.data.id;
-        token = response.data.token;
-        return response.data;
+        return response.data?.token;
     });
 }
 
 // Set the callback to the address that you would like to receive the notification when the payment have been made.
 async function setApprovalWebhook(callbackUrl) {
-    if (await login() === null) return null;
+    var token = await login();
+    if (!token) return null;
 
     const url = `${apiUrl}/api/Preference/SetApprovalWebhook?url=${callbackUrl}`;
-    return await putData(url).then(response => {
+    return await putData(url, null, token).then(response => {
         if (response.status != 200) {
             console.log('Set Approval Webhook Error:', response);
             return null
@@ -85,10 +82,11 @@ async function setApprovalWebhook(callbackUrl) {
 
 // this function will return your profile
 async function getProfile() {
-    if (await login() === null) return null;
-    console.log(token);
+    var token = await login();
+    if (!token) return null;
+
     const url = `${apiUrl}/api/Profile/GetFull`;
-    return await getData(url).then(response => {
+    return await getData(url, token).then(response => {
         if (response.status != 200) {
             console.log('Get Profile Error:', response);
             return null
@@ -98,11 +96,12 @@ async function getProfile() {
 }
 
 // this function will find a user wallet
-async function getWalletInfo(contact, currencyCode = '') {
-    if (await login() === null) return null;
+async function getWalletInfo(contact, currencyCode = 'INR') {
+    var token = await login();
+    if (!token) return null;
 
     const url = `${apiUrl}/api/Wallet/Info?contact=${contact}&currencyCode=${currencyCode}`;
-    return await getData(url).then(response => {
+    return await getData(url, token).then(response => {
         if (response.status != 200) {
             console.log('Get Wallet Info Error:', response);
             return null
@@ -113,10 +112,11 @@ async function getWalletInfo(contact, currencyCode = '') {
 
 // this function fetch the status of a transaction
 async function getStatus(accountid, reference) {
-    if (await login() === null) return null;
+    var token = await login();
+    if (!token) return null;
 
     const url = `${apiUrl}/api/Transaction/StatusByReference/${accountid}?reference=${reference}`;
-    return await getData(url).then(response => {
+    return await getData(url, token).then(response => {
         if (response.status != 200) {
             console.log('Get Status Error:', response);
             return null
@@ -128,14 +128,15 @@ async function getStatus(accountid, reference) {
 
 //This function will create the payment request that the user will approve
 //When the user approves the transaction the approval callback will be triggered
-async function buildRequestPaymentRedirect() {
-    if (await login() === null) return;
-    var wallet = await getWalletInfo(merchant, 'INR'); //get payees wallet
-    console.log('wallet:', wallet);
+async function getRequestPaymentRedirect(amount = 10, currencyCode = 'INR') {
+    var wallet = await getWalletInfo(merchant, currencyCode); //get payees wallet
     if (!wallet.id) {
         console.log('Request Data Error:', `Merchant wallet Not found (${merchant})`);
         return null
     }
+
+    var token = await login();
+    if (!token) return null;
 
     const url = `${apiUrl}/api/Merchant/RequestPaymentRedirect?returnUrl=${localhost}`; // encrypt the payment data
     const body = {
@@ -146,12 +147,12 @@ async function buildRequestPaymentRedirect() {
         "amount": amount, // the amount to pay
         "currencyCode": currencyCode, // the currency to display to the user (payments will still be made in INR and then converted)
     }
-    return await postData(url, body).then(response => {
+    return await postData(url, body, token).then(response => {
         if (response.status != 200) {
             console.log('Request Data Error:', response);
             return null
         }
-        console.log(response);
+        console.log("Redirect url: ", response.data.description);
         return response.data.description;
     });
 }
@@ -160,34 +161,39 @@ async function buildRequestPaymentRedirect() {
 //This will listen for a callback from Xprizo once the transaction has been approved
 //To setup a callback go to settings/preferences in Xprizo and set the approval callback
 async function callbackHandler(req, res) {
-    var str = "";
+    var str = "";  // request payload
     req.on('data', function (chunk) { str += chunk; });
     req.on('end', function () {
         var data = JSON.parse(str);
         console.log('callback response:', data);
         if (data.transaction.id) {
             console.log(`Checking status for tx: ${data.transaction.reference}`);
-            login()
-                .then(() => {
-                    return getWalletInfo(merchant, 'INR')
-                })
-                .then(response => {
-                    return getStatus(response.id, data.transaction.reference)
-                })
-                .then(response => {
-                    res.writeHead(200, { 'Content-Type': 'application/json' });
-                    res.end(response.data);
-                })
-                .catch(() => {
-                    res.end();
-                })
+            // we need to fetch the merchants wallet so that we can find the transaction
+            getWalletInfo(merchant, currencyCode).then(response => {
+                // now fetch the status of the transaction
+                return getStatus(response.id, data.transaction.reference)
+            }).then(response => {
+                console.log("Response", { status: response });
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ status: response.description }));
+            }).catch(er => {
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ status: "Fail" }));
+            })
+        } else if (data.status) {
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ status: data.status }));
         } else {
-            res.end();
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ status: "No Data" }));
         }
     })
 }
 
 // You can use our message service to receive notifications
+// To get notifications abount the status of a transaction, you can use Callbacks
+// or choose to get feedback via the messaging server.
+// this is a usefull option if your callback url is publically available.
 async function connect() {
     console.log(`connecting to hub...${messageServer} with '${username}'`);
 
@@ -201,12 +207,18 @@ async function connect() {
         console.log('Transaction Approved...', data);
     });
 
-    await login();
+    var token = await login();
+    if (!token) return null;
+
     return hubConnection.start()
         .then(() => hubConnection.invoke("Register", token))
         .then(response => {
-            console.log(`Logged in with ${username}`, response)
-        }).catch(ex => console.log(ex));
+            console.log(`Connected in with ${username}`, response)
+            return `Connected with ${username}`
+        }).catch(ex => {
+            console.log(ex)
+            return ex.message;
+        });
 }
 
 // server and basic routing 
@@ -215,7 +227,7 @@ const server = createServer(async (req, res) => {
         case '/login':
             return await login().then(response => {
                 if (response === null) return res.end('Request failed');
-                res.end(JSON.stringify(response));
+                res.end(`user: ${username}, Token: ${response}`);
             });
         case '/profile':
             return await getProfile().then(response => {
@@ -223,7 +235,7 @@ const server = createServer(async (req, res) => {
                 res.end(JSON.stringify(response));
             });
         case '/wallet':
-            return await getWalletInfo(contactId).then(response => {
+            return await getWalletInfo(merchant).then(response => {
                 if (response === null) return res.end('Request failed');
                 res.end(JSON.stringify(response));
             });
@@ -231,37 +243,37 @@ const server = createServer(async (req, res) => {
             const webhook = `${localhost}/callbackHandler`
             return await setApprovalWebhook(webhook).then(response => {
                 if (response === null) return res.end('Request failed');
-                res.end(response);
+                res.end(`Webhhook set to: ${webhook}`);
             });
         case '/requestpayment':
-            return await buildRequestPaymentRedirect().then(response => {
+            return await getRequestPaymentRedirect().then(response => {
                 if (response === null) return res.end('Request failed');
                 return res.writeHead(302, { Location: response }).end();  // redirect to this address
             });
+        case '/connect':
+            return await connect().then((response) => {
+                res.end(response);
+            });
         case '/callbackHandler':
             return callbackHandler(req, res);
-        case '/connect':
-            return await connect().then(() => {
-                res.end("Connected");
-            });
         default:
             res.end(`
             <!DOCTYPE html><body style='margin:20px;'>
               <h2>Xprizo Integration Example<h2> <br/>  
 
-              <h2><a href="/login">/login</a></h2> Used to get a token<br/>
-              <h2><a href="/profile">/profile</a></h2> Used to get youpr profile and wallet id (accountId) <br/>
-              <h2><a href="/wallet">/wallet</a></h2> Get default Wallet info <br/>
+              <h2><a href="/login">/login</a></h2>Fetch a token, that can be used to access api functions<br/>
+              <h2><a href="/profile">/profile</a></h2> Fetch all your account getails  <br/>
+              <h2><a href="/wallet">/wallet</a></h2> Fetch the merchants wallet <br/>
               <h2><a href="/setcallback">/setcallback</a></h2> Sets your callback so that you can listen for approvals <br/>
               <h2><a href="/connect">/connect</a></h2> Connect to message setver <br/>
-              <h2><a href="/requestpayment" >/requestpayment</a></h2> <br/>
+              <h2><a href="/requestpayment">/requestpayment</a></h2> Redirect to the Request payment screen </a></h2>  <br/>
             </body></html>`);
             break;
     }
 
 });
 
-server.listen(8080);
-console.log('server running on port 8080');
+server.listen(port);
+console.log(`server running on port ${port}`);
 
 
