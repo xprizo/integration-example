@@ -26,9 +26,12 @@ This example does the following
 
 ## In your system ##
 
-**username** is your processing profile that you will use to perform the requests
-**password** is your profile password
-**merchant** is the account that will received the deposits
+**username** is your processing profile that you will use to perform the requests.
+
+**password** is your profile password.
+
+**merchant** is the account that will received the deposits.
+
 (it is better to have 2 accounts)
 The processing account is the account that is used to process the transaction
 The merchant account is the account that hold the money
