@@ -1,10 +1,10 @@
 # Integration Example
 
-This is a small node application that shows how to integrates with Xprizo 
+This is a small node application that shows how to integrate with Xprizo 
 
 ## Getting Started ##
 
-First install the node modules by running  
+Install the node modules by running  
 
 	npm install
 
@@ -18,11 +18,11 @@ run the application using
 
 This example does the following
 
-- Get a token used to access other api functions
-- Gets your profile to that you can use your wallet
-- Sends a payment request to Xprizo and then redirects to the payment screen
-- Sets your callback to this app
-- Waits for Payment Approval Callbacks
+- Shows how to get a token that can be used to access other api functions
+- Shows how to fetch all your account information
+- Shows how to set the callback webhook
+- Shows how to use the Messaging servce
+- Shows how to use the RequestPaymentRedirect
 
 ## In your system ##
 
@@ -33,7 +33,7 @@ merchant is the account that will received the deposits
 The processing account is the account that is used to process the transaction
 The merchant account is the account that hold the money
 
-We using callbacks, set the approval callback to to the address where you would like to receive notifications when the payment is complete
+To use callbacks, set the approval callback to the the address where you would like to receive notifications when the payment is complete
 
 
 
@@ -41,11 +41,11 @@ We using callbacks, set the approval callback to to the address where you would 
 
 > I do not have an account
 
-You must first register as a user on the system
+You must first register as a user on Xprizo
 
-> I cannot find the user even though I know they exists
+> I cannot find the merchant even though I know they exists
 
-Users must have there wallets visible to the public or they must be in your friends list.
+Users (and Merchants) must have there wallets visible to the public or they must be in your friends list.
 They must also have enabled their "Find by" options in preferences
 
 
