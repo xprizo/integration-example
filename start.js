@@ -5,16 +5,15 @@ const port = 8080
 const localhost = `http://localhost:${port}`; // this server
 
 let hubConnection; // the connection of the messaging server
+const messageServer = 'https://xprizo-messaging.azurewebsites.net/hub'; // Xprizo's messaging server that can be used for receing event messages via sockets (signalR)
 
-const username = 'test-processor'; // The user/profile that performs the process
-const password = 'Password123!';
-
+const apiUrl = 'https://xprizo-test.azurewebsites.net';  // Xprizo's api server
+const username = ''; // your username
+const password = ''; // your user password
 const merchant = 'test-merchant'; // (Payee) The merchant who will receive the funds
 const name = 'a.user@email.com' // (Payor) The person making the payment (use a unique name, like their email from your system)
 
-const apiUrl = 'https://xprizo-test.azurewebsites.net';  // Xprizo's api server
-const messageServer = 'https://xprizo-messaging.azurewebsites.net/hub'; // Xprizo's messaging server that can be used for receing event messages via sockets (signalR)
-
+let canlogin = false;
 
 // General http function to call the api server
 async function getData(url = "", token = "") { return await postData(url, null, token, "GET"); }
@@ -61,6 +60,7 @@ async function login() {
             console.log('Login Error:', response);
             return null
         }
+        canlogin = true;
         return response.data?.token;
     });
 }
@@ -128,7 +128,7 @@ async function getStatus(accountid, reference) {
 
 //This function will create the payment request that the user will approve
 //When the user approves the transaction the approval callback will be triggered
-async function getRequestPaymentRedirect(amount = 10, currencyCode = 'INR') {
+async function getRequestPaymentRedirect(amount, currencyCode) {
     var wallet = await getWalletInfo(merchant, currencyCode); //get payees wallet
     if (!wallet.id) {
         console.log('Request Data Error:', `Merchant wallet Not found (${merchant})`);
@@ -227,26 +227,47 @@ const server = createServer(async (req, res) => {
         case '/login':
             return await login().then(response => {
                 if (response === null) return res.end('Request failed');
-                res.end(`user: ${username}, Token: ${response}`);
+                return res.end(`
+                    <!DOCTYPE html><body style='margin:20px;'>
+                    <h2>Xprizo Integration Example</h2> <br/>  
+                    <h2><a href="/">Back</a></h2>
+                    User: ${username}</br>
+                    Token: ${response}
+                    </body></html>`);
             });
         case '/profile':
             return await getProfile().then(response => {
                 if (response === null) return res.end('Request failed');
-                res.end(JSON.stringify(response));
+                return res.end(`
+                    <!DOCTYPE html><body style='margin:20px;'>
+                    <h2>Xprizo Integration Example</h2> <br/>  
+                    <h2><a href="/">Back</a></h2>
+                    Profile Data: ${JSON.stringify(response)}</br>
+                    </body></html>`);
             });
         case '/wallet':
             return await getWalletInfo(merchant).then(response => {
                 if (response === null) return res.end('Request failed');
-                res.end(JSON.stringify(response));
+                return res.end(`
+                <!DOCTYPE html><body style='margin:20px;'>
+                <h2>Xprizo Integration Example</h2> <br/>  
+                <h2><a href="/">Back</a></h2>
+                Wallet Data: ${JSON.stringify(response)}</br>
+                </body></html>`);
             });
         case '/setcallback':
             const webhook = `${localhost}/callbackHandler`
             return await setApprovalWebhook(webhook).then(response => {
                 if (response === null) return res.end('Request failed');
-                res.end(`Webhhook set to: ${webhook}`);
+                return res.end(`
+                <!DOCTYPE html><body style='margin:20px;'>
+                <h2>Xprizo Integration Example</h2> <br/>  
+                <h2><a href="/">Back</a></h2>
+                Webhhook set to: ${webhook}</br>
+                </body></html>`);
             });
         case '/requestpayment':
-            return await getRequestPaymentRedirect().then(response => {
+            return await getRequestPaymentRedirect(800, 'INR').then(response => {
                 if (response === null) return res.end('Request failed');
                 return res.writeHead(302, { Location: response }).end();  // redirect to this address
             });
@@ -257,18 +278,36 @@ const server = createServer(async (req, res) => {
         case '/callbackHandler':
             return callbackHandler(req, res);
         default:
-            res.end(`
-            <!DOCTYPE html><body style='margin:20px;'>
-              <h2>Xprizo Integration Example<h2> <br/>  
-
-              <h2><a href="/login">/login</a></h2>Fetch a token, that can be used to access api functions<br/>
-              <h2><a href="/profile">/profile</a></h2> Fetch all your account getails  <br/>
-              <h2><a href="/wallet">/wallet</a></h2> Fetch the merchants wallet <br/>
-              <h2><a href="/setcallback">/setcallback</a></h2> Sets your callback so that you can listen for approvals <br/>
-              <h2><a href="/connect">/connect</a></h2> Connect to message setver <br/>
-              <h2><a href="/requestpayment">/requestpayment</a></h2> Redirect to the Request payment screen </a></h2>  <br/>
-            </body></html>`);
-            break;
+            if (!username) {
+                return res.end(`
+                <!DOCTYPE html><body style='margin:20px;'>
+                  <h2>Xprizo Integration Example</h2> 
+                  <br/>  
+                  <div style='font-size:large;'>
+                  Before you login, you must change the "username" and "password" fields to use your Xprizo login details.
+                  </br>
+                  If you do not have an account, you can create one on <a href="${apiUrl}/#/register">Xprizo</a>
+                  </div>
+                </body></html>`);
+            }
+            else if (!canlogin) {
+                return res.end(`
+                    <!DOCTYPE html><body style='margin:20px;'>
+                    <h2>Xprizo Integration Example</h2> <br/>  
+                    <h2><a href="/login">/login</a></h2>Fetch a token using your user account, This can then be used to access api functions<br/>
+                    </body></html>`);
+            } else {
+                return res.end(`
+                    <!DOCTYPE html><body style='margin:20px;'>
+                    <h2>Xprizo Integration Example</h2> <br/>  
+                    <h2><a href="/login">/login</a></h2>Fetch a token using your user account (<b>${username}</b>), This can then be used to access api functions<br/>
+                    <h2><a href="/profile">/profile</a></h2> Fetch all your (<b>${username}</b>) account details  <br/>
+                    <h2><a href="/wallet">/wallet</a></h2> Fetch the merchants (<b>${merchant}</b>) wallet <br/>
+                    <h2><a href="/setcallback">/setcallback</a></h2> Sets your callback (<b>${localhost}</b>) so that you can listen for approvals <br/>
+                    <h2><a href="/connect">/connect</a></h2> Connect to message setver <br/>
+                    <h2><a href="/requestpayment">/requestpayment</a></h2> Redirect to the Request payment screen </a></h2>  <br/>
+                    </body></html>`);
+            }
     }
 
 });
